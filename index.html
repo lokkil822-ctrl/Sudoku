@@ -1,163 +1,946 @@
 <!DOCTYPE html>
 <html lang="ru">
 <head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
 <title>ASEM Sudoku</title>
 <style>
-body { font-family: Arial; text-align: center; background:#f4f4f4; padding:20px; }
-#grid { display: grid; grid-template-columns: repeat(9,50px); grid-template-rows: repeat(9,50px); gap:2px; margin:20px auto; }
-.cell { border:1px solid #999; position:relative; width:50px; height:50px; }
-.cell.prefilled { background:#ddd; font-weight:bold; text-align:center; line-height:50px; font-size:22px; }
-input { width:100%; height:100%; font-size:22px; text-align:center; border:none; outline:none; }
-.bold-border-top{border-top:3px solid black;}
-.bold-border-left{border-left:3px solid black;}
-.bold-border-right{border-right:3px solid black;}
-.bold-border-bottom{border-bottom:3px solid black;}
-button, select{margin:5px;padding:8px;font-size:14px; cursor:pointer;}
-.note{position:absolute; top:0; left:0; width:100%; height:100%; font-size:10px; color:gray; display:flex; flex-wrap:wrap; justify-content:center; align-items:center;}
+  :root{
+    --bg:#f4f4f4;
+    --panel:#ffffff;
+    --text:#222;
+    --muted:#888;
+    --accent:#4CAF50;
+    --cell-size:56px;
+    --gap:4px;
+    --prefill-bg:#e6e6e6;
+    --prefill-weight:700;
+    --user-weight:500;
+    --note-color:#666;
+    --highlight:#fffa8c;
+    --same-num:#c8f7ff;
+    --error-color:#ffb3b3;
+  }
+
+  /* THEMES (switched by body class) */
+  body.theme-black { --panel:#111; --bg:#0b0b0b; --text:#f5f5f5; --muted:#bdbdbd; --prefill-bg:#222; --note-color:#cfcfcf; }
+  body.theme-white { --panel:#ffffff; --bg:#f9f9f9; --text:#222; --muted:#666; --prefill-bg:#f0f0f0; --note-color:#666; }
+  body.theme-red { --panel:#fff5f5; --bg:#fff0f0; --text:#3b0000; --muted:#8a3b3b; --prefill-bg:#ffecec; --note-color:#8a3b3b; --accent:#e53935;}
+  body.theme-blue { --panel:#f0f8ff; --bg:#eef7ff; --text:#023047; --muted:#4b6b82; --prefill-bg:#e6f4ff; --note-color:#3b6b8a; --accent:#1e88e5;}
+
+  body{
+    margin:0; font-family: Inter, Arial, Helvetica, sans-serif;
+    background:var(--bg); color:var(--text);
+    -webkit-font-smoothing:antialiased;
+    -moz-osx-font-smoothing:grayscale;
+  }
+
+  .container{
+    max-width:1100px; margin:18px auto; padding:18px;
+  }
+
+  header{
+    display:flex; gap:16px; align-items:center; justify-content:space-between;
+    margin-bottom:12px;
+  }
+  h1{ margin:0; font-size:20px; letter-spacing:0.4px; }
+  .subtitle{ color:var(--muted); font-size:13px; }
+
+  .panel{
+    background:var(--panel); border-radius:10px; padding:12px; box-shadow:0 6px 18px rgba(10,10,10,0.08);
+  }
+
+  /* layout */
+  .top-row{ display:flex; gap:12px; align-items:center; margin-bottom:12px; flex-wrap:wrap; }
+  .controls { display:flex; gap:8px; align-items:center; flex-wrap:wrap; }
+
+  select, button, label { font-size:14px; }
+  select, button { padding:8px 10px; border-radius:8px; border:1px solid #ddd; background:transparent; cursor:pointer; }
+  button.primary { background:var(--accent); color:white; border:none; }
+  button.ghost { background:transparent; border:1px solid #ccc; }
+
+  .game-area { display:flex; gap:20px; align-items:flex-start; margin-top:12px; flex-wrap:wrap; justify-content:center; }
+
+  /* grid */
+  .grid-wrap { display:flex; flex-direction:column; align-items:center; gap:8px; }
+  .grid {
+    display:grid;
+    grid-template-columns: repeat(9, var(--cell-size));
+    grid-template-rows: repeat(9, var(--cell-size));
+    gap:var(--gap);
+    user-select:none;
+    touch-action:manipulation;
+  }
+
+  .cell {
+    width:var(--cell-size); height:var(--cell-size); background:white;
+    border-radius:6px; position:relative; overflow:hidden;
+    display:flex; align-items:center; justify-content:center;
+    font-size:20px; line-height:1; cursor:text;
+    transition: box-shadow .12s, background-color .12s, transform .06s;
+    border:1px solid rgba(0,0,0,0.08);
+  }
+
+  /* thick borders for 3x3 */
+  .cell.border-top{ border-top-width:3px; }
+  .cell.border-left{ border-left-width:3px; }
+  .cell.border-right{ border-right-width:3px; }
+  .cell.border-bottom{ border-bottom-width:3px; }
+
+  .cell.prefill {
+    background:var(--prefill-bg);
+    font-weight:var(--prefill-weight);
+    color:var(--text);
+  }
+  .cell.user {
+    font-weight:var(--user-weight);
+    color:var(--text);
+  }
+
+  .cell .notes {
+    position:absolute; inset:4px; display:grid; grid-template-columns:repeat(3,1fr); grid-template-rows:repeat(3,1fr);
+    gap:0; font-size:10px; color:var(--note-color); align-items:center; justify-items:center; pointer-events:none;
+  }
+
+  .cell .main-val { pointer-events:none; }
+
+  .cell.selected { box-shadow:0 4px 12px rgba(0,0,0,0.12); background:var(--highlight); }
+  .cell.same-number { background:var(--same-num); }
+  .cell.error { background:var(--error-color); }
+
+  .cell.dim { opacity:0.55; }
+
+  /* small UI */
+  .side-panel { width:320px; min-width:260px; display:flex; flex-direction:column; gap:10px; }
+  .info { display:flex; justify-content:space-between; gap:8px; }
+  .stats { display:flex; gap:12px; align-items:center; }
+  .stat { font-size:13px; color:var(--muted); }
+  .small { font-size:12px; color:var(--muted); }
+
+  .toggles { display:flex; gap:8px; flex-wrap:wrap; }
+
+  /* leaderboard */
+  .leaderboard { margin-top:8px; font-size:13px; }
+  .lb-item { display:flex; justify-content:space-between; padding:6px 8px; border-radius:8px; background:rgba(0,0,0,0.03); margin-bottom:6px; }
+
+  /* responsive */
+  @media (max-width:900px){
+    .game-area{ flex-direction:column; align-items:center; }
+    .side-panel { width:100%; max-width:480px; }
+  }
+
 </style>
 </head>
-<body>
-<h1>ASEM Sudoku</h1>
+<body class="theme-white">
+<div class="container">
+  <header>
+    <div>
+      <h1>ASEM Sudoku</h1>
+      <div class="subtitle">Классическое 9×9. Уникальное решение. Notes, таймер, рейтинг.</div>
+    </div>
+    <div class="small">Сделано для: Асем</div>
+  </header>
 
-<div id="controls">
-Уровень:
-<select id="level">
-<option value="easy">Легкий</option>
-<option value="medium">Средний</option>
-<option value="hard">Сложный</option>
-</select>
-Цвет:
-<select id="color">
-<option value="black">Черный</option>
-<option value="white">Белый</option>
-<option value="red">Красный</option>
-<option value="blue">Синий</option>
-</select>
-<button id="newGame">Начать заново</button>
-<button id="solveBtn">Решить</button>
-</div>
+  <div class="panel top-row">
+    <div class="controls">
+      <label>Уровень
+        <select id="level">
+          <option value="easy">Лёгкий</option>
+          <option value="medium" selected>Средний</option>
+          <option value="hard">Сложный</option>
+        </select>
+      </label>
 
-<div id="grid"></div>
+      <label>Тема
+        <select id="theme">
+          <option value="theme-white">Белая</option>
+          <option value="theme-black">Чёрная</option>
+          <option value="theme-red">Красная</option>
+          <option value="theme-blue">Синяя</option>
+        </select>
+      </label>
 
-<div id="stats">
-Время: <span id="timer">0:00</span> | Ошибки: <span id="errors">0</span>
+      <label>Цвет ввода
+        <select id="inputColor">
+          <option value="black">Чёрный</option>
+          <option value="white">Белый</option>
+          <option value="red">Красный</option>
+          <option value="blue">Синий</option>
+        </select>
+      </label>
+
+      <div style="display:flex;gap:8px;align-items:center;">
+        <button id="newBtn" class="primary">Новая</button>
+        <button id="restartBtn" class="ghost">Начать заново</button>
+        <button id="solveBtn">Решить</button>
+      </div>
+    </div>
+
+    <div style="margin-left:auto;">
+      <div class="toggles">
+        <label style="display:flex;align-items:center;gap:6px;">
+          <input type="checkbox" id="showErrors" checked /> Подсветка ошибок
+        </label>
+        <label style="display:flex;align-items:center;gap:6px;">
+          <input type="checkbox" id="autoCheck" /> Автопроверка (подсказки)
+        </label>
+        <label style="display:flex;align-items:center;gap:6px;">
+          <input type="checkbox" id="highlightSame" checked /> Подсветка одинаковых
+        </label>
+      </div>
+    </div>
+  </div>
+
+  <div class="game-area">
+    <div class="grid-wrap panel" style="padding:12px;">
+      <div id="grid" class="grid" aria-label="Sudoku grid"></div>
+
+      <div style="display:flex;gap:8px;justify-content:center; margin-top:10px; flex-wrap:wrap;">
+        <button id="noteModeBtn">Режим заметок: <span id="noteState">Выкл</span></button>
+        <button id="clearNotesBtn">Очистить заметки</button>
+        <button id="eraseBtn">Стереть ячейку</button>
+        <button id="hintBtn">Показать подсказку</button>
+      </div>
+    </div>
+
+    <aside class="side-panel panel">
+      <div class="info">
+        <div>
+          <div class="stats">
+            <div class="stat">Время: <strong id="timer">0:00</strong></div>
+            <div class="stat">Ошибки: <strong id="errors">0</strong></div>
+            <div class="stat">Подсказки: <strong id="clues">—</strong></div>
+          </div>
+          <div class="small" id="statusText">Статус: Ожидание</div>
+        </div>
+      </div>
+
+      <div>
+        <div style="display:flex; gap:8px; flex-wrap:wrap; margin-bottom:6px;">
+          <!-- Digit buttons for touch -->
+          <div id="digitButtons" style="display:flex;gap:6px;flex-wrap:wrap;"></div>
+        </div>
+        <div class="small">Нажми клавишу 1–9 для ввода. Для заметки включи режим заметок.</div>
+      </div>
+
+      <div style="margin-top:8px;">
+        <div style="display:flex; justify-content:space-between; align-items:center;">
+          <div><strong>Рейтинги (топ-5)</strong></div>
+          <div class="small">по уровню</div>
+        </div>
+        <div id="leaderboard" class="leaderboard"></div>
+      </div>
+
+      <div style="margin-top:auto;">
+        <div class="small" style="color:var(--muted); margin-top:8px;">Поддержка: подсветка строки/столбца/блока, уникальность решения при генерации, логика проверок.</div>
+      </div>
+    </aside>
+  </div>
 </div>
 
 <script>
-const gridEl = document.getElementById("grid");
-const levelSelect = document.getElementById("level");
-const colorSelect = document.getElementById("color");
-const timerEl = document.getElementById("timer");
-const errorsEl = document.getElementById("errors");
+/*
+  ASEM Sudoku — single-file implementation
+  Features:
+   - Generator: creates solved board then removes numbers ensuring unique solution
+   - Levels (clue count ranges):
+       easy: 36-40
+       medium: 30-34
+       hard: 25-29
+   - Notes mode (toggle)
+   - Highlight selected row/col/block, same numbers
+   - Timer, errors count
+   - Show hint (reveals one correct cell)
+   - Leaderboard stored in localStorage (top5 per level)
+*/
 
-let board = [];
-let solution = [];
-let timerInterval;
-let seconds = 0;
-let errors = 0;
+(() => {
+  // --- Utilities ---
+  const randInt = (n) => Math.floor(Math.random()*n);
+  const shuffle = (arr) => {
+    for(let i=arr.length-1;i>0;i--){
+      const j = Math.floor(Math.random()*(i+1));
+      [arr[i],arr[j]] = [arr[j],arr[i]];
+    }
+    return arr;
+  };
 
-const puzzles = {
-easy: [[5,3,0,0,7,0,0,0,0],[6,0,0,1,9,5,0,0,0],[0,9,8,0,0,0,0,6,0],[8,0,0,0,6,0,0,0,3],[4,0,0,8,0,3,0,0,1],[7,0,0,0,2,0,0,0,6],[0,6,0,0,0,0,2,8,0],[0,0,0,4,1,9,0,0,5],[0,0,0,0,8,0,0,7,9]],
-medium: [[0,0,0,2,6,0,7,0,1],[6,8,0,0,7,0,0,9,0],[1,9,0,0,0,4,5,0,0],[8,2,0,1,0,0,0,4,0],[0,0,4,6,0,2,9,0,0],[0,5,0,0,0,3,0,2,8],[0,0,9,3,0,0,0,7,4],[0,4,0,0,5,0,0,3,6],[7,0,3,0,1,8,0,0,0]],
-hard: [[0,0,0,0,0,0,0,0,0],[0,0,0,0,0,3,0,8,5],[0,0,1,0,2,0,0,0,0],[0,0,0,5,0,7,0,0,0],[0,0,4,0,0,0,1,0,0],[0,9,0,0,0,0,0,0,0],[5,0,0,0,0,0,0,7,3],[0,0,2,0,1,0,0,0,0],[0,0,0,0,4,0,0,0,9]]
-};
+  // DOM refs
+  const gridEl = document.getElementById('grid');
+  const levelSel = document.getElementById('level');
+  const themeSel = document.getElementById('theme');
+  const inputColorSel = document.getElementById('inputColor');
+  const newBtn = document.getElementById('newBtn');
+  const restartBtn = document.getElementById('restartBtn');
+  const solveBtn = document.getElementById('solveBtn');
+  const timerEl = document.getElementById('timer');
+  const errorsEl = document.getElementById('errors');
+  const cluesEl = document.getElementById('clues');
+  const statusText = document.getElementById('statusText');
+  const noteModeBtn = document.getElementById('noteModeBtn');
+  const noteState = document.getElementById('noteState');
+  const clearNotesBtn = document.getElementById('clearNotesBtn');
+  const eraseBtn = document.getElementById('eraseBtn');
+  const hintBtn = document.getElementById('hintBtn');
+  const digitButtons = document.getElementById('digitButtons');
+  const leaderboardEl = document.getElementById('leaderboard');
+  const showErrorsChk = document.getElementById('showErrors');
+  const autoCheckChk = document.getElementById('autoCheck');
+  const highlightSameChk = document.getElementById('highlightSame');
 
-// ==== Создание сетки ====
-function createGrid(puzzle) {
-  gridEl.innerHTML = "";
-  board = JSON.parse(JSON.stringify(puzzle));
-  solution = JSON.parse(JSON.stringify(puzzle));
-  solveSudoku(solution);
-  seconds = 0; errors = 0; updateStats();
+  // State
+  let solvedBoard = null;     // full solution 9x9
+  let puzzleBoard = null;     // current puzzle with 0 as empty
+  let startBoard = null;      // original prefilled (to reset)
+  let notes = {};             // map 'r-c' -> Set of numbers (notes)
+  let selectedCell = null;    // {r,c}
+  let timer = null;
+  let seconds = 0;
+  let errors = 0;
+  let isNoteMode = false;
 
-  for (let r=0;r<9;r++){
-    for (let c=0;c<9;c++){
-      const cell = document.createElement("div");
-      cell.classList.add("cell");
-      if(r%3===0)cell.classList.add("bold-border-top");
-      if(c%3===0)cell.classList.add("bold-border-left");
-      if(r===8)cell.classList.add("bold-border-bottom");
-      if(c===8)cell.classList.add("bold-border-right");
-      cell.dataset.row = r; cell.dataset.col = c;
+  // clue ranges
+  const RANGES = {
+    easy: [36,40],
+    medium: [30,34],
+    hard: [25,29]
+  };
 
-      if(board[r][c]!==0){
-        cell.textContent = board[r][c];
-        cell.classList.add("prefilled");
-      } else {
-        const input = document.createElement("input");
-        input.type="text"; input.maxLength=1;
-        input.style.color=colorSelect.value;
-        input.addEventListener("input",onInput);
-        input.addEventListener("keydown",onNote);
-        cell.appendChild(input);
+  // --- Sudoku solver with solution counting (stop after countLimit) ---
+  function copyBoard(b){
+    return b.map(r=>r.slice());
+  }
+
+  function findEmpty(b){
+    for(let r=0;r<9;r++) for(let c=0;c<9;c++) if(b[r][c]===0) return [r,c];
+    return null;
+  }
+
+  function isSafe(b, r, c, val){
+    for(let i=0;i<9;i++){
+      if(b[r][i]===val) return false;
+      if(b[i][c]===val) return false;
+    }
+    const br = Math.floor(r/3)*3, bc = Math.floor(c/3)*3;
+    for(let i=0;i<3;i++) for(let j=0;j<3;j++) if(b[br+i][bc+j]===val) return false;
+    return true;
+  }
+
+  // Backtracking solver with heuristic (choose cell with fewest candidates)
+  function solveCount(b, countLimit=2){
+    let count = 0;
+    const board = copyBoard(b);
+
+    // precompute candidates
+    function search(){
+      if(count >= countLimit) return;
+      // find empty with minimal candidates
+      let best = null, bestCandidates = null;
+      for(let r=0;r<9;r++){
+        for(let c=0;c<9;c++){
+          if(board[r][c]===0){
+            const cand = [];
+            for(let v=1;v<=9;v++) if(isSafe(board,r,c,v)) cand.push(v);
+            if(cand.length===0) return; // dead end
+            if(!best || cand.length < bestCandidates.length){
+              best = [r,c]; bestCandidates = cand;
+              if(cand.length===1) break;
+            }
+          }
+        }
+        if(best && bestCandidates.length===1) break;
       }
+      if(!best){
+        count++; return;
+      }
+      const [r,c] = best;
+      for(const v of bestCandidates){
+        board[r][c] = v;
+        search();
+        board[r][c] = 0;
+        if(count >= countLimit) return;
+      }
+    }
+    search();
+    return count;
+  }
 
-      gridEl.appendChild(cell);
+  // build full solved board by backtracking random
+  function generateFullSolution(){
+    const board = Array.from({length:9},()=>Array(9).fill(0));
+    const order = [];
+    for(let r=0;r<9;r++) for(let c=0;c<9;c++) order.push([r,c]);
+    // shuffle order to randomize
+    (function fill(i=0){
+      if(i>=81) return true;
+      // choose cell in order
+      const [r,c] = order[i];
+      // try values in shuffled order
+      const vals = [1,2,3,4,5,6,7,8,9].sort(()=>Math.random()-0.5);
+      for(const v of vals){
+        if(isSafe(board,r,c,v)){
+          board[r][c] = v;
+          if(fill(i+1)) return true;
+          board[r][c] = 0;
+        }
+      }
+      return false;
+    })();
+    // In rare case above may fail due to order; simple reseed with cell-by-cell randomized
+    if(findEmpty(board)!==null){
+      // standard fill row by row randomized
+      const tryFill = (cell=0) => {
+        if(cell===81) return true;
+        const r = Math.floor(cell/9), c = cell%9;
+        const vals = [1,2,3,4,5,6,7,8,9].sort(()=>Math.random()-0.5);
+        for(const v of vals){
+          if(isSafe(board,r,c,v)){
+            board[r][c] = v;
+            if(tryFill(cell+1)) return true;
+            board[r][c] = 0;
+          }
+        }
+        return false;
+      };
+      tryFill(0);
+    }
+    return board;
+  }
+
+  // generate puzzle by removing numbers while preserving unique solution
+  function generatePuzzle(level='medium'){
+    const [minClues, maxClues] = RANGES[level];
+    let targetClues = Math.floor((minClues+maxClues)/2);
+    // random within range
+    targetClues = randInt(maxClues - minClues + 1) + minClues;
+
+    let full = generateFullSolution();
+    // Start with full solved
+    let puzzle = copyBoard(full);
+
+    // list of cell indices for removal, try balanced by blocks
+    const cells = [];
+    for(let br=0;br<3;br++){
+      for(let bc=0;bc<3;bc++){
+        const blockCells = [];
+        for(let r=br*3;r<br*3+3;r++){
+          for(let c=bc*3;c<bc*3+3;c++){
+            blockCells.push([r,c]);
+          }
+        }
+        shuffle(blockCells);
+        cells.push(...blockCells);
+      }
+    }
+    // Shuffle to random order
+    shuffle(cells);
+
+    // Remove while ensuring uniqueness
+    let currentClues = 81;
+    for(const [r,c] of cells){
+      if(currentClues <= targetClues) break;
+      const backup = puzzle[r][c];
+      puzzle[r][c] = 0;
+      const solutions = solveCount(puzzle, 2);
+      if(solutions !== 1){
+        // cannot remove, restore
+        puzzle[r][c] = backup;
+      } else {
+        currentClues--;
+      }
+    }
+
+    // if still too many clues (rare), try further removals in random order but check uniqueness
+    if(currentClues > targetClues){
+      const all = [];
+      for(let r=0;r<9;r++) for(let c=0;c<9;c++) all.push([r,c]);
+      shuffle(all);
+      for(const [r,c] of all){
+        if(currentClues <= targetClues) break;
+        if(puzzle[r][c]===0) continue;
+        const bak = puzzle[r][c]; puzzle[r][c]=0;
+        const solutions = solveCount(puzzle,2);
+        if(solutions !== 1) puzzle[r][c]=bak; else currentClues--;
+      }
+    }
+
+    // Final check: ensure uniqueness and solution corresponds to full
+    if(solveCount(puzzle,2) !== 1){
+      // fallback: use a simple pre-made puzzle (should be rare)
+      puzzle = fallbackPuzzle(level);
+      full = copyBoard(puzzle);
+      solveSudoku(full);
+    }
+
+    return {puzzle, full, clues: currentClues};
+  }
+
+  // fallback puzzles if generator fails
+  function fallbackPuzzle(level){
+    const e = [
+      [5,3,0,0,7,0,0,0,0],
+      [6,0,0,1,9,5,0,0,0],
+      [0,9,8,0,0,0,0,6,0],
+      [8,0,0,0,6,0,0,0,3],
+      [4,0,0,8,0,3,0,0,1],
+      [7,0,0,0,2,0,0,0,6],
+      [0,6,0,0,0,0,2,8,0],
+      [0,0,0,4,1,9,0,0,5],
+      [0,0,0,0,8,0,0,7,9]
+    ];
+    const m = [
+      [0,0,0,2,6,0,7,0,1],
+      [6,8,0,0,7,0,0,9,0],
+      [1,9,0,0,0,4,5,0,0],
+      [8,2,0,1,0,0,0,4,0],
+      [0,0,4,6,0,2,9,0,0],
+      [0,5,0,0,0,3,0,2,8],
+      [0,0,9,3,0,0,0,7,4],
+      [0,4,0,0,5,0,0,3,6],
+      [7,0,3,0,1,8,0,0,0]
+    ];
+    const h = [
+      [0,0,0,0,0,0,0,0,0],
+      [0,0,0,0,0,3,0,8,5],
+      [0,0,1,0,2,0,0,0,0],
+      [0,0,0,5,0,7,0,0,0],
+      [0,0,4,0,0,0,1,0,0],
+      [0,9,0,0,0,0,0,0,0],
+      [5,0,0,0,0,0,0,7,3],
+      [0,0,2,0,1,0,0,0,0],
+      [0,0,0,0,4,0,0,0,9]
+    ];
+    return level==='easy'?e:(level==='medium'?m:h);
+  }
+
+  // solveSudoku to fill missing cells (deterministic)
+  function solveSudoku(b){
+    const board = copyBoard(b);
+    // recursive plain backtracking
+    function backtrack(){
+      const pos = findEmpty(board);
+      if(!pos) return true;
+      const [r,c] = pos;
+      for(let v=1;v<=9;v++){
+        if(isSafe(board,r,c,v)){
+          board[r][c]=v;
+          if(backtrack()) return true;
+          board[r][c]=0;
+        }
+      }
+      return false;
+    }
+    backtrack();
+    // copy to b
+    for(let r=0;r<9;r++) for(let c=0;c<9;c++) b[r][c]=board[r][c];
+  }
+
+  // --- UI helpers ---
+  function cellId(r,c){ return `cell-${r}-${c}`; }
+  function noteKey(r,c){ return `${r}-${c}`; }
+
+  function buildGridDOM(){
+    gridEl.innerHTML = '';
+    for(let r=0;r<9;r++){
+      for(let c=0;c<9;c++){
+        const div = document.createElement('div');
+        div.className = 'cell';
+        // add thick borders for 3x3
+        if(r%3===0) div.classList.add('border-top');
+        if(c%3===0) div.classList.add('border-left');
+        if(r===8) div.classList.add('border-bottom');
+        if(c===8) div.classList.add('border-right');
+        div.id = cellId(r,c);
+        div.dataset.r = r; div.dataset.c = c;
+        // click behavior
+        div.addEventListener('click', () => selectCell(r,c));
+        gridEl.appendChild(div);
+      }
     }
   }
-  startTimer();
-}
 
-// ==== Ввод ====
-function onInput(e){
-  const input = e.target;
-  const cell = input.parentElement;
-  const r = parseInt(cell.dataset.row);
-  const c = parseInt(cell.dataset.col);
-  const val = parseInt(input.value);
-  if(isNaN(val)||val<1||val>9){ input.value=""; return; }
-  board[r][c]=val;
-  if(!checkValid(board,r,c,val)){ errors++; errorsEl.textContent = errors; input.style.color="red"; }
-  else input.style.color=colorSelect.value;
-  checkWin();
-}
+  function renderBoard(){
+    for(let r=0;r<9;r++){
+      for(let c=0;c<9;c++){
+        const cell = document.getElementById(cellId(r,c));
+        cell.innerHTML = '';
+        cell.classList.remove('prefill','user','selected','same-number','error','dim');
+        const val = puzzleBoard[r][c];
+        if(startBoard[r][c] !== 0){
+          cell.classList.add('prefill');
+          const span = document.createElement('div');
+          span.className = 'main-val';
+          span.textContent = startBoard[r][c];
+          cell.appendChild(span);
+        } else {
+          if(val !== 0){
+            cell.classList.add('user');
+            const span = document.createElement('div');
+            span.className = 'main-val';
+            span.textContent = val;
+            cell.appendChild(span);
+          } else {
+            // empty, may show notes
+            const nk = noteKey(r,c);
+            if(notes[nk] && notes[nk].size){
+              const notesDiv = document.createElement('div');
+              notesDiv.className = 'notes';
+              // render numbers 1..9 in 3x3 grid
+              for(let n=1;n<=9;n++){
+                const nspan = document.createElement('div');
+                nspan.textContent = notes[nk].has(n) ? n : '';
+                notesDiv.appendChild(nspan);
+              }
+              cell.appendChild(notesDiv);
+            }
+          }
+        }
+      }
+    }
+    // update stats UI
+    cluesEl.textContent = puzzleBoard.flat().filter(v=>v!==0).length;
+    errorsEl.textContent = errors;
+    updateLeaderboard();
+  }
 
-// ==== Заметки ====
-function onNote(e){
-  if(!e.shiftKey) return;
-  e.preventDefault();
-  const num = parseInt(e.key);
-  if(isNaN(num)||num<1||num>9) return;
-  const input = e.target;
-  const cell = input.parentElement;
-  let noteDiv = cell.querySelector(".note");
-  if(!noteDiv){ noteDiv = document.createElement("div"); noteDiv.classList.add("note"); cell.appendChild(noteDiv);}
-  if(noteDiv.textContent.includes(num)) noteDiv.textContent = noteDiv.textContent.replace(num,"");
-  else noteDiv.textContent += num;
-  input.value="";
-}
+  function selectCell(r,c){
+    // cannot select prefilled? we allow selecting for highlight but cannot edit
+    const prev = selectedCell;
+    selectedCell = {r,c};
+    // update classes
+    document.querySelectorAll('.cell').forEach(el=>{
+      el.classList.remove('selected','dim','same-number','error');
+    });
+    // dim non-row/col/block
+    for(let rr=0;rr<9;rr++){
+      for(let cc=0;cc<9;cc++){
+        const el = document.getElementById(cellId(rr,cc));
+        const sameRow = rr===r, sameCol = cc===c;
+        const sameBox = Math.floor(rr/3)===Math.floor(r/3) && Math.floor(cc/3)===Math.floor(c/3);
+        if(!(sameRow||sameCol||sameBox)){
+          el.classList.add('dim');
+        }
+      }
+    }
+    // highlight selected, same-number, errors optionally
+    const selEl = document.getElementById(cellId(r,c));
+    selEl.classList.add('selected');
 
-// ==== Проверка ====
-function checkValid(bd,row,col,num){
-  for(let i=0;i<9;i++){ if((i!==col && bd[row][i]===num)||(i!==row && bd[i][col]===num)) return false; }
-  const br = Math.floor(row/3)*3; const bc = Math.floor(col/3)*3;
-  for(let i=0;i<3;i++){ for(let j=0;j<3;j++){ const rr=br+i,cc=bc+j; if((rr!==row||cc!==col)&&bd[rr][cc]===num) return false; } }
-  return true;
-}
+    // highlight numbers equal to selected cell's number (if exist)
+    if(highlightSameChk.checked){
+      const current = puzzleBoard[r][c];
+      if(current !== 0){
+        for(let rr=0;rr<9;rr++){
+          for(let cc=0;cc<9;cc++){
+            if(puzzleBoard[rr][cc] === current){
+              document.getElementById(cellId(rr,cc)).classList.add('same-number');
+            }
+          }
+        }
+      }
+    }
+  }
 
-// ==== Таймер ====
-function startTimer(){ clearInterval(timerInterval); timerInterval = setInterval(()=>{ seconds++; updateStats(); },1000);}
-function updateStats(){ const min=Math.floor(seconds/60),sec=seconds%60; timerEl.textContent=`${min}:${sec<10?'0':''}${sec}`; errorsEl.textContent=errors; }
+  // input number at selected cell (or add note)
+  function inputNumber(num){
+    if(!selectedCell) return;
+    const {r,c} = selectedCell;
+    if(startBoard[r][c] !== 0) return; // cannot change prefilled
+    const nk = noteKey(r,c);
+    if(isNoteMode){
+      if(!notes[nk]) notes[nk] = new Set();
+      if(notes[nk].has(num)) notes[nk].delete(num); else notes[nk].add(num);
+      // if adding note, do not set main value
+      puzzleBoard[r][c] = 0;
+    } else {
+      // set main value
+      puzzleBoard[r][c] = num;
+      // clear notes when set main
+      if(notes[nk]) notes[nk].clear();
+      // check conflict
+      if(showErrorsChk.checked && !isValidAt(puzzleBoard, r, c, num)){
+        // mark cell error and increase error count
+        errors++;
+        document.getElementById(cellId(r,c)).classList.add('error');
+      }
+      // optionally auto-check and mark wrongs
+      if(autoCheckChk.checked){
+        if(puzzleBoard[r][c] !== solvedBoard[r][c]){
+          // incorrect
+          errors++;
+          document.getElementById(cellId(r,c)).classList.add('error');
+        }
+      }
+    }
+    renderBoard();
+    if(selectedCell) selectCell(r,c); // reapply selection visuals
+    checkWinCondition();
+  }
 
-// ==== Победа ====
-function checkWin(){ for(let r=0;r<9;r++){ for(let c=0;c<9;c++){ if(board[r][c]!==solution[r][c]) return; } } clearInterval(timerInterval); alert(`Поздравляем! Время: ${timerEl.textContent}, ошибки: ${errors}`); }
+  function eraseSelected(){
+    if(!selectedCell) return;
+    const {r,c} = selectedCell;
+    if(startBoard[r][c] !== 0) return;
+    puzzleBoard[r][c] = 0;
+    const nk = noteKey(r,c);
+    if(notes[nk]) notes[nk].clear();
+    renderBoard();
+    selectCell(r,c);
+  }
 
-// ==== Решение ====
-function solveSudoku(bd){
-  for(let r=0;r<9;r++){ for(let c=0;c<9;c++){ if(bd[r][c]===0){
-    for(let num=1;num<=9;num++){ if(checkValid(bd,r,c,num)){ bd[r][c]=num; if(solveSudoku(bd)) return true; bd[r][c]=0; }} return false; }}}
-  return true;
-}
+  function isValidAt(b, r, c, val){
+    // check no duplicates in row/col/box except at self
+    for(let i=0;i<9;i++){
+      if(i!==c && b[r][i]===val) return false;
+      if(i!==r && b[i][c]===val) return false;
+    }
+    const br = Math.floor(r/3)*3, bc = Math.floor(c/3)*3;
+    for(let i=0;i<3;i++) for(let j=0;j<3;j++){
+      const rr = br+i, cc = bc+j;
+      if((rr!==r || cc!==c) && b[rr][cc] === val) return false;
+    }
+    return true;
+  }
 
-// ==== Кнопки ====
-document.getElementById("newGame").addEventListener("click",()=>createGrid(puzzles[levelSelect.value]));
-document.getElementById("solveBtn").addEventListener("click",()=>{ createGrid(solution); });
-colorSelect.addEventListener("change",()=>{ document.querySelectorAll(".cell input").forEach(i=>i.style.color=colorSelect.value); });
+  // check win: puzzleBoard equals solvedBoard fully (non-zero and match)
+  function checkWinCondition(){
+    for(let r=0;r<9;r++){
+      for(let c=0;c<9;c++){
+        if(puzzleBoard[r][c] === 0) return false;
+        if(puzzleBoard[r][c] !== solvedBoard[r][c]) return false;
+      }
+    }
+    // win
+    clearInterval(timer);
+    statusText.textContent = `Поздравляем! Уровень ${levelSel.value}. Время ${formatTime(seconds)}, ошибки ${errors}.`;
+    onWin();
+    return true;
+  }
 
-// ==== Старт ====
-createGrid(puzzles.easy);
+  function onWin(){
+    // store leaderboard entry
+    const lvl = levelSel.value;
+    // ask for name
+    let name = prompt('Вы победили! Введите ваше имя для рейтинга (оставьте пустым для "Игрок"):','Игрок');
+    if(!name) name = 'Игрок';
+    const recKey = `asem_leaderboard_${lvl}`;
+    const arr = JSON.parse(localStorage.getItem(recKey) || '[]');
+    arr.push({name, time: seconds, date: new Date().toISOString()});
+    // sort ascending
+    arr.sort((a,b)=>a.time - b.time);
+    // keep top5
+    const top = arr.slice(0,5);
+    localStorage.setItem(recKey, JSON.stringify(top));
+    updateLeaderboard();
+  }
+
+  function startTimer(){
+    clearInterval(timer);
+    seconds = 0;
+    timerEl.textContent = formatTime(seconds);
+    timer = setInterval(()=>{
+      seconds++;
+      timerEl.textContent = formatTime(seconds);
+    },1000);
+  }
+
+  function formatTime(s){
+    const m = Math.floor(s/60);
+    const sec = s%60;
+    return `${m}:${sec<10?'0':''}${sec}`;
+  }
+
+  function stopTimer(){
+    clearInterval(timer);
+  }
+
+  // show hint: reveal one cell that is empty or incorrect
+  function showHint(){
+    // prefer empty cells
+    const empties = [];
+    const wrongs = [];
+    for(let r=0;r<9;r++){
+      for(let c=0;c<9;c++){
+        if(startBoard[r][c] !== 0) continue;
+        if(puzzleBoard[r][c] === 0) empties.push([r,c]);
+        else if(puzzleBoard[r][c] !== solvedBoard[r][c]) wrongs.push([r,c]);
+      }
+    }
+    const pick = empties.length? empties[randInt(empties.length)] : (wrongs.length?wrongs[randInt(wrongs.length)]:null);
+    if(!pick) return alert('Нет подсказок: поле заполнено верно или нет пустых клеток.');
+    const [r,c] = pick;
+    puzzleBoard[r][c] = solvedBoard[r][c];
+    // clear notes
+    const nk = noteKey(r,c); if(notes[nk]) notes[nk].clear();
+    errors += 0; // hint doesn't add errors
+    renderBoard();
+    selectCell(r,c);
+  }
+
+  // Leaderboard
+  function updateLeaderboard(){
+    const lvl = levelSel.value;
+    const recKey = `asem_leaderboard_${lvl}`;
+    const arr = JSON.parse(localStorage.getItem(recKey) || '[]');
+    leaderboardEl.innerHTML = '';
+    if(arr.length===0){
+      leaderboardEl.innerHTML = '<div class="small">Пока нет результатов</div>';
+      return;
+    }
+    arr.forEach((item, idx) => {
+      const div = document.createElement('div');
+      div.className = 'lb-item';
+      div.innerHTML = `<div>${idx+1}. ${escapeHtml(item.name)}</div><div>${formatTime(item.time)}</div>`;
+      leaderboardEl.appendChild(div);
+    });
+  }
+
+  function escapeHtml(s){ return (s+'').replace(/[&<>"']/g, c=>({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'})[c]); }
+
+  // Generate and initialize new puzzle
+  async function newGame(){
+    // UI feedback
+    statusText.textContent = 'Генерация... (может занять несколько секунд)';
+    // minor delay to allow UI update
+    await new Promise(r => setTimeout(r,50));
+    const level = levelSel.value;
+    // Generate puzzle (may be slow but ok)
+    const res = generatePuzzle(level);
+    puzzleBoard = res.puzzle;
+    solvedBoard = res.full;
+    startBoard = copyBoard(puzzleBoard); // original for prefilled (some zeros remain)
+    // But startBoard should mark prefilled from puzzle; ensure startBoard has original clues
+    // Reset state
+    notes = {};
+    errors = 0;
+    seconds = 0;
+    buildGridDOM();
+    renderBoard();
+    startTimer();
+    statusText.textContent = 'Новая головоломка готова';
+    updateLeaderboard();
+  }
+
+  // Restart: reset to initial prefilled & clear user entries and notes
+  function restartGame(){
+    if(!startBoard) return;
+    puzzleBoard = copyBoard(startBoard);
+    // clear notes
+    notes = {};
+    errors = 0;
+    seconds = 0;
+    buildGridDOM();
+    renderBoard();
+    startTimer();
+    statusText.textContent = 'Начато заново';
+  }
+
+  // Solve: fill whole board with solution
+  function doSolve(){
+    if(!solvedBoard) return;
+    puzzleBoard = copyBoard(solvedBoard);
+    renderBoard();
+    stopTimer();
+    statusText.textContent = 'Показано решение';
+  }
+
+  // --- keyboard / digit buttons handling ---
+  function setupDigitButtons(){
+    digitButtons.innerHTML = '';
+    for(let d=1;d<=9;d++){
+      const btn = document.createElement('button');
+      btn.textContent = d;
+      btn.addEventListener('click', ()=> inputNumber(d));
+      digitButtons.appendChild(btn);
+    }
+  }
+
+  document.addEventListener('keydown', (e)=>{
+    if(document.activeElement && ['INPUT','TEXTAREA'].includes(document.activeElement.tagName)) {
+      // don't interfere with native inputs if present
+    }
+    // digits 1..9
+    if(e.key >= '1' && e.key <= '9'){
+      const num = parseInt(e.key);
+      if(e.shiftKey){
+        // interpret as note mode add/remove
+        const prevNote = isNoteMode;
+        if(!isNoteMode) toggleNoteMode(true);
+        inputNumber(num);
+        toggleNoteMode(prevNote); // restore previous
+      } else {
+        inputNumber(num);
+      }
+    } else if(e.key === 'Backspace' || e.key === 'Delete'){
+      eraseSelected();
+    } else if(e.key === 'n' && (e.ctrlKey || e.metaKey)){
+      // Ctrl+N new game
+      e.preventDefault(); newBtn.click();
+    }
+  });
+
+  // theme change
+  themeSel.addEventListener('change', ()=>{
+    const cls = themeSel.value;
+    document.body.className = cls;
+  });
+
+  // input color
+  inputColorSel.addEventListener('change', ()=>{
+    const c = inputColorSel.value;
+    document.documentElement.style.setProperty('--inputColor', c);
+    // apply directly to user cells (we update on render)
+    document.querySelectorAll('.cell.user').forEach(cell=>{
+      cell.style.color = c;
+    });
+  });
+
+  // note mode toggle
+  function toggleNoteMode(force){
+    isNoteMode = (typeof force === 'boolean') ? force : !isNoteMode;
+    noteState.textContent = isNoteMode ? 'Вкл' : 'Выкл';
+    noteModeBtn.classList.toggle('primary', isNoteMode);
+  }
+  noteModeBtn.addEventListener('click', ()=> toggleNoteMode());
+
+  clearNotesBtn.addEventListener('click', ()=>{
+    notes = {};
+    renderBoard();
+  });
+  eraseBtn.addEventListener('click', eraseSelected);
+  hintBtn.addEventListener('click', showHint);
+
+  newBtn.addEventListener('click', newGame);
+  restartBtn.addEventListener('click', restartGame);
+  solveBtn.addEventListener('click', doSolve);
+
+  levelSel.addEventListener('change', ()=> {
+    // Generate new puzzle for selected level
+    newGame();
+  });
+
+  showErrorsChk.addEventListener('change', ()=> {
+    renderBoard();
+  });
+  highlightSameChk.addEventListener('change', ()=>{
+    if(selectedCell) selectCell(selectedCell.r, selectedCell.c);
+  });
+
+  // initial setup
+  buildGridDOM();
+  setupDigitButtons();
+  toggleNoteMode(false);
+  updateLeaderboard();
+
+  // generate first puzzle automatically
+  newGame();
+
+  // expose some debugging in window (optional)
+  window.asem = {
+    generatePuzzle, solveCount, solveSudoku
+  };
+
+})();
 </script>
 </body>
 </html>
