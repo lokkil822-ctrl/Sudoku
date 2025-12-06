@@ -1,0 +1,152 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>ASEM Sudoku</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      background: #f4f4f4;
+      margin: 0;
+      padding: 20px;
+      text-align: center;
+    }
+    h1 {
+      margin-bottom: 20px;
+    }
+    #grid {
+      display: grid;
+      grid-template-columns: repeat(9, 40px);
+      grid-template-rows: repeat(9, 40px);
+      gap: 2px;
+      width: fit-content;
+      margin: 20px auto;
+    }
+    input {
+      width: 40px;
+      height: 40px;
+      text-align: center;
+      font-size: 20px;
+      border: 1px solid #999;
+      background: white;
+    }
+    .bold-border-top { border-top: 3px solid black !important; }
+    .bold-border-left { border-left: 3px solid black !important; }
+    .bold-border-right { border-right: 3px solid black !important; }
+    .bold-border-bottom { border-bottom: 3px solid black !important; }
+
+    button {
+      padding: 10px 20px;
+      font-size: 16px;
+      margin: 10px;
+      cursor: pointer;
+      border: none;
+      border-radius: 5px;
+    }
+    #solveBtn { background: #4CAF50; color: white; }
+    #clearBtn { background: #e53935; color: white; }
+  </style>
+</head>
+<body>
+  <h1>ASEM Sudoku</h1>
+  <div id="grid"></div>
+
+  <button id="solveBtn">Решить</button>
+  <button id="clearBtn">Очистить</button>
+
+  <script>
+    const grid = document.getElementById("grid");
+
+    function createGrid() {
+      for (let i = 0; i < 81; i++) {
+        const cell = document.createElement("input");
+        cell.setAttribute("type", "text");
+        cell.maxLength = 1;
+
+        let row = Math.floor(i / 9);
+        let col = i % 9;
+
+        if (row % 3 === 0) cell.classList.add("bold-border-top");
+        if (col % 3 === 0) cell.classList.add("bold-border-left");
+        if (col === 8) cell.classList.add("bold-border-right");
+        if (row === 8) cell.classList.add("bold-border-bottom");
+
+        grid.appendChild(cell);
+      }
+    }
+
+    createGrid();
+
+    function getBoard() {
+      const cells = document.querySelectorAll("#grid input");
+      const board = [];
+      let row = [];
+
+      cells.forEach((cell, idx) => {
+        let val = cell.value;
+        row.push(val === "" ? 0 : Number(val));
+        if ((idx + 1) % 9 === 0) {
+          board.push(row);
+          row = [];
+        }
+      });
+      return board;
+    }
+
+    function setBoard(board) {
+      const cells = document.querySelectorAll("#grid input");
+      let idx = 0;
+      for (let r = 0; r < 9; r++) {
+        for (let c = 0; c < 9; c++) {
+          cells[idx].value = board[r][c] === 0 ? "" : board[r][c];
+          idx++;
+        }
+      }
+    }
+
+    function isValid(board, r, c, num) {
+      for (let i = 0; i < 9; i++) {
+        if (board[r][i] === num) return false;
+        if (board[i][c] === num) return false;
+      }
+      const br = Math.floor(r / 3) * 3;
+      const bc = Math.floor(c / 3) * 3;
+      for (let i = 0; i < 3; i++) {
+        for (let j = 0; j < 3; j++) {
+          if (board[br + i][bc + j] === num) return false;
+        }
+      }
+      return true;
+    }
+
+    function solve(board) {
+      for (let r = 0; r < 9; r++) {
+        for (let c = 0; c < 9; c++) {
+          if (board[r][c] === 0) {
+            for (let num = 1; num <= 9; num++) {
+              if (isValid(board, r, c, num)) {
+                board[r][c] = num;
+                if (solve(board)) return true;
+                board[r][c] = 0;
+              }
+            }
+            return false;
+          }
+        }
+      }
+      return true;
+    }
+
+    document.getElementById("solveBtn").onclick = () => {
+      let board = getBoard();
+      if (solve(board)) setBoard(board);
+      else alert("Нет решения :(");
+    };
+
+    document.getElementById("clearBtn").onclick = () => {
+      document.querySelectorAll("#grid input").forEach(cell => cell.value = "");
+    };
+  </script>
+</body>
+</html>
