@@ -1,152 +1,316 @@
 <!DOCTYPE html>
 <html lang="ru">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>ASEM Sudoku</title>
-  <style>
-    body {
-      font-family: Arial, sans-serif;
-      background: #f4f4f4;
-      margin: 0;
-      padding: 20px;
-      text-align: center;
-    }
-    h1 {
-      margin-bottom: 20px;
-    }
-    #grid {
-      display: grid;
-      grid-template-columns: repeat(9, 40px);
-      grid-template-rows: repeat(9, 40px);
-      gap: 2px;
-      width: fit-content;
-      margin: 20px auto;
-    }
-    input {
-      width: 40px;
-      height: 40px;
-      text-align: center;
-      font-size: 20px;
-      border: 1px solid #999;
-      background: white;
-    }
-    .bold-border-top { border-top: 3px solid black !important; }
-    .bold-border-left { border-left: 3px solid black !important; }
-    .bold-border-right { border-right: 3px solid black !important; }
-    .bold-border-bottom { border-bottom: 3px solid black !important; }
-
-    button {
-      padding: 10px 20px;
-      font-size: 16px;
-      margin: 10px;
-      cursor: pointer;
-      border: none;
-      border-radius: 5px;
-    }
-    #solveBtn { background: #4CAF50; color: white; }
-    #clearBtn { background: #e53935; color: white; }
-  </style>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ASEM Sudoku</title>
+<style>
+body {
+  font-family: Arial, sans-serif;
+  background: #f4f4f4;
+  text-align: center;
+  padding: 20px;
+}
+h1 { margin-bottom: 10px; }
+#controls { margin-bottom: 15px; }
+#grid {
+  display: grid;
+  grid-template-columns: repeat(9, 50px);
+  grid-template-rows: repeat(9, 50px);
+  gap: 2px;
+  margin: 0 auto 20px auto;
+}
+.cell {
+  width: 50px;
+  height: 50px;
+  text-align: center;
+  font-size: 22px;
+  border: 1px solid #999;
+  position: relative;
+  vertical-align: middle;
+}
+.cell.prefilled {
+  background: #ddd;
+  font-weight: bold;
+}
+.cell .note {
+  font-size: 10px;
+  color: gray;
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  align-items: center;
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+}
+.bold-border-top { border-top: 3px solid black; }
+.bold-border-left { border-left: 3px solid black; }
+.bold-border-right { border-right: 3px solid black; }
+.bold-border-bottom { border-bottom: 3px solid black; }
+button, select { margin: 5px; padding: 8px; font-size: 14px; cursor: pointer; }
+#stats { margin-top: 10px; }
+</style>
 </head>
 <body>
-  <h1>ASEM Sudoku</h1>
-  <div id="grid"></div>
 
+<h1>ASEM Sudoku</h1>
+
+<div id="controls">
+  Уровень: 
+  <select id="level">
+    <option value="easy">Легкий</option>
+    <option value="medium">Средний</option>
+    <option value="hard">Сложный</option>
+  </select>
+  Цвет:
+  <select id="color">
+    <option value="black">Черный</option>
+    <option value="white">Белый</option>
+    <option value="red">Красный</option>
+    <option value="blue">Синий</option>
+  </select>
+  <button id="newGame">Начать заново</button>
   <button id="solveBtn">Решить</button>
-  <button id="clearBtn">Очистить</button>
+</div>
 
-  <script>
-    const grid = document.getElementById("grid");
+<div id="grid"></div>
 
-    function createGrid() {
-      for (let i = 0; i < 81; i++) {
-        const cell = document.createElement("input");
-        cell.setAttribute("type", "text");
-        cell.maxLength = 1;
+<div id="stats">
+  Время: <span id="timer">0:00</span> | Ошибки: <span id="errors">0</span>
+  <div id="record"></div>
+</div>
 
-        let row = Math.floor(i / 9);
-        let col = i % 9;
+<script>
+const gridEl = document.getElementById("grid");
+let board = [];
+let solution = [];
+let timerInterval;
+let seconds = 0;
+let errors = 0;
 
-        if (row % 3 === 0) cell.classList.add("bold-border-top");
-        if (col % 3 === 0) cell.classList.add("bold-border-left");
-        if (col === 8) cell.classList.add("bold-border-right");
-        if (row === 8) cell.classList.add("bold-border-bottom");
+const puzzles = {
+  easy: [
+    [5,3,0,0,7,0,0,0,0],
+    [6,0,0,1,9,5,0,0,0],
+    [0,9,8,0,0,0,0,6,0],
+    [8,0,0,0,6,0,0,0,3],
+    [4,0,0,8,0,3,0,0,1],
+    [7,0,0,0,2,0,0,0,6],
+    [0,6,0,0,0,0,2,8,0],
+    [0,0,0,4,1,9,0,0,5],
+    [0,0,0,0,8,0,0,7,9]
+  ],
+  medium: [
+    [0,0,0,2,6,0,7,0,1],
+    [6,8,0,0,7,0,0,9,0],
+    [1,9,0,0,0,4,5,0,0],
+    [8,2,0,1,0,0,0,4,0],
+    [0,0,4,6,0,2,9,0,0],
+    [0,5,0,0,0,3,0,2,8],
+    [0,0,9,3,0,0,0,7,4],
+    [0,4,0,0,5,0,0,3,6],
+    [7,0,3,0,1,8,0,0,0]
+  ],
+  hard: [
+    [0,0,0,0,0,0,0,0,0],
+    [0,0,0,0,0,3,0,8,5],
+    [0,0,1,0,2,0,0,0,0],
+    [0,0,0,5,0,7,0,0,0],
+    [0,0,4,0,0,0,1,0,0],
+    [0,9,0,0,0,0,0,0,0],
+    [5,0,0,0,0,0,0,7,3],
+    [0,0,2,0,1,0,0,0,0],
+    [0,0,0,0,4,0,0,0,9]
+  ]
+};
 
-        grid.appendChild(cell);
+// ==== Создание сетки ====
+function createGrid(puzzle) {
+  gridEl.innerHTML = "";
+  board = JSON.parse(JSON.stringify(puzzle));
+  solution = JSON.parse(JSON.stringify(puzzle));
+  solveSudoku(solution);
+  seconds = 0; errors = 0;
+  updateTimer();
+  document.getElementById("errors").textContent = errors;
+  document.getElementById("record").textContent = getRecord();
+
+  for (let r=0; r<9; r++){
+    for (let c=0; c<9; c++){
+      const cell = document.createElement("div");
+      cell.classList.add("cell");
+      if (r%3===0) cell.classList.add("bold-border-top");
+      if (c%3===0) cell.classList.add("bold-border-left");
+      if (c===8) cell.classList.add("bold-border-right");
+      if (r===8) cell.classList.add("bold-border-bottom");
+      cell.dataset.row = r;
+      cell.dataset.col = c;
+
+      if (board[r][c]!==0){
+        cell.textContent = board[r][c];
+        cell.classList.add("prefilled");
+      } else {
+        const input = document.createElement("input");
+        input.type="text";
+        input.maxLength=1;
+        input.style.width="100%";
+        input.style.height="100%";
+        input.style.fontSize="22px";
+        input.addEventListener("input", onInput);
+        input.addEventListener("keydown", onNote);
+        cell.appendChild(input);
       }
+      gridEl.appendChild(cell);
     }
+  }
+  startTimer();
+}
 
-    createGrid();
+// ==== Обработка обычного ввода ====
+function onInput(e){
+  const input = e.target;
+  const cell = input.parentElement;
+  const r = parseInt(cell.dataset.row);
+  const c = parseInt(cell.dataset.col);
+  const val = parseInt(input.value);
+  if (isNaN(val) || val<1 || val>9){
+    input.value="";
+    return;
+  }
+  board[r][c]=val;
+  if (!checkValid(board,r,c,val)){
+    errors++;
+    document.getElementById("errors").textContent = errors;
+    input.style.color="red";
+  } else {
+    input.style.color=document.getElementById("color").value;
+  }
+  checkWin();
+}
 
-    function getBoard() {
-      const cells = document.querySelectorAll("#grid input");
-      const board = [];
-      let row = [];
+// ==== Обработка заметок (Shift + цифра) ====
+function onNote(e){
+  if (!e.shiftKey) return;
+  e.preventDefault();
+  const num = parseInt(e.key);
+  if (isNaN(num)||num<1||num>9) return;
+  const input = e.target;
+  const cell = input.parentElement;
+  let noteDiv = cell.querySelector(".note");
+  if (!noteDiv){
+    noteDiv=document.createElement("div");
+    noteDiv.classList.add("note");
+    cell.appendChild(noteDiv);
+  }
+  if (noteDiv.textContent.includes(num)) {
+    noteDiv.textContent=noteDiv.textContent.replace(num,"");
+  } else {
+    noteDiv.textContent += num;
+  }
+  input.value="";
+}
 
-      cells.forEach((cell, idx) => {
-        let val = cell.value;
-        row.push(val === "" ? 0 : Number(val));
-        if ((idx + 1) % 9 === 0) {
-          board.push(row);
-          row = [];
-        }
-      });
-      return board;
+// ==== Проверка правильности ввода ====
+function checkValid(bd,row,col,num){
+  for (let i=0;i<9;i++){
+    if ((i!==col && bd[row][i]===num) || (i!==row && bd[i][col]===num)) return false;
+  }
+  const br = Math.floor(row/3)*3;
+  const bc = Math.floor(col/3)*3;
+  for (let i=0;i<3;i++){
+    for (let j=0;j<3;j++){
+      const rr=br+i, cc=bc+j;
+      if ((rr!==row || cc!==col) && bd[rr][cc]===num) return false;
     }
+  }
+  return true;
+}
 
-    function setBoard(board) {
-      const cells = document.querySelectorAll("#grid input");
-      let idx = 0;
-      for (let r = 0; r < 9; r++) {
-        for (let c = 0; c < 9; c++) {
-          cells[idx].value = board[r][c] === 0 ? "" : board[r][c];
-          idx++;
-        }
-      }
+// ==== Таймер ====
+function startTimer(){
+  clearInterval(timerInterval);
+  timerInterval=setInterval(()=>{
+    seconds++;
+    updateTimer();
+  },1000);
+}
+function updateTimer(){
+  const min=Math.floor(seconds/60);
+  const sec=seconds%60;
+  document.getElementById("timer").textContent=`${min}:${sec<10?'0':''}${sec}`;
+}
+
+// ==== Начать заново ====
+document.getElementById("newGame").addEventListener("click",()=>{
+  const lvl=document.getElementById("level").value;
+  createGrid(puzzles[lvl]);
+});
+
+// ==== Смена цвета ====
+document.getElementById("color").addEventListener("change",()=>{
+  const col=document.getElementById("color").value;
+  document.querySelectorAll(".cell input").forEach(c=>{
+    c.style.color=col;
+  });
+});
+
+// ==== Проверка победы ====
+function checkWin(){
+  for (let r=0;r<9;r++){
+    for (let c=0;c<9;c++){
+      if (board[r][c]!==solution[r][c]) return;
     }
+  }
+  clearInterval(timerInterval);
+  saveRecord();
+  alert(`Поздравляем! Вы завершили Sudoku за ${document.getElementById("timer").textContent} с ${errors} ошибками`);
+}
 
-    function isValid(board, r, c, num) {
-      for (let i = 0; i < 9; i++) {
-        if (board[r][i] === num) return false;
-        if (board[i][c] === num) return false;
-      }
-      const br = Math.floor(r / 3) * 3;
-      const bc = Math.floor(c / 3) * 3;
-      for (let i = 0; i < 3; i++) {
-        for (let j = 0; j < 3; j++) {
-          if (board[br + i][bc + j] === num) return false;
-        }
-      }
-      return true;
-    }
+// ==== Сохранение рекорда ====
+function saveRecord(){
+  const lvl=document.getElementById("level").value;
+  const t=seconds;
+  const key="record_"+lvl;
+  if (!localStorage[key] || t<localStorage[key]){
+    localStorage[key]=t;
+    document.getElementById("record").textContent=getRecord();
+  }
+}
+function getRecord(){
+  const lvl=document.getElementById("level").value;
+  const key="record_"+lvl;
+  return localStorage[key]?`Рекорд: ${formatTime(localStorage[key])}`:"Рекорд: —";
+}
+function formatTime(s){
+  const min=Math.floor(s/60);
+  const sec=s%60;
+  return `${min}:${sec<10?'0':''}${sec}`;
+}
 
-    function solve(board) {
-      for (let r = 0; r < 9; r++) {
-        for (let c = 0; c < 9; c++) {
-          if (board[r][c] === 0) {
-            for (let num = 1; num <= 9; num++) {
-              if (isValid(board, r, c, num)) {
-                board[r][c] = num;
-                if (solve(board)) return true;
-                board[r][c] = 0;
-              }
-            }
-            return false;
+// ==== Решение Sudoku ====
+function solveSudoku(bd){
+  for (let r=0;r<9;r++){
+    for (let c=0;c<9;c++){
+      if (bd[r][c]===0){
+        for (let num=1;num<=9;num++){
+          if (checkValid(bd,r,c,num)){
+            bd[r][c]=num;
+            if (solveSudoku(bd)) return true;
+            bd[r][c]=0;
           }
         }
+        return false;
       }
-      return true;
     }
+  }
+  return true;
+}
 
-    document.getElementById("solveBtn").onclick = () => {
-      let board = getBoard();
-      if (solve(board)) setBoard(board);
-      else alert("Нет решения :(");
-    };
-
-    document.getElementById("clearBtn").onclick = () => {
-      document.querySelectorAll("#grid input").forEach(cell => cell.value = "");
-    };
-  </script>
+// ==== Запуск первой игры ====
+createGrid(puzzles.easy);
+</script>
 </body>
 </html>
